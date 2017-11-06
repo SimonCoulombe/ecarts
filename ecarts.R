@@ -13,6 +13,14 @@ way <- st_read("ecarts.gpx", layer = "waypoints") %>% st_transform(., "+proj=lon
 tracks <- st_read("ecarts.gpx", layer = "tracks") %>% st_transform(., "+proj=longlat +datum=WGS84") 
 
 
+
+### les kml il faut enlever l'axe des Z avec st_zm, sinon on a une erreur opaque
+# https://github.com/r-spatial/mapview/issues/98
+# Error in if (length(nms) != n || any(nms == "")) stop("'options' must be a fully named list, or have no names (NULL)") : 
+#missing value where TRUE/FALSE needed
+couture <- st_read("la-trail-des-couture.kml") %>% st_zm() %>% rename(name = Name) %>% select(name, geometry)
+crete <- st_read("la-crete-en-tete.kml")%>% st_zm()%>% rename(name = Name) %>% select(name, geometry)
+
 ## une alternative est de parser le GPX du garmin, ce qui va garder les datestamp:
 #https://shiring.github.io/maps/2017/04/09/gran_canaria
 # Parse the GPX file
@@ -186,7 +194,7 @@ chesterfield_ligne2 <-
 
 #### FIN : BRICOLAGE DES SEGMENTS 
 
-#### DÉBUT: Convertir les points en lignes
+#### DÉBUT: Convertir les points en lignes, greffer couture et crete, calculer la longueur
 all <- rbind( ge_ligne,
               gee_ligne,
               marco_ligne,
@@ -198,6 +206,7 @@ all <- rbind( ge_ligne,
   group_by(name) %>%
   summarize(., do_union = FALSE) %>%
   st_cast("LINESTRING")  %>%
+  rbind(couture, crete) %>%
   mutate(longueur = st_length(.),
          name_legende = paste0(name, " - ", round(longueur), " m")) 
 #### FIN: Convertir les points en lignes
@@ -205,7 +214,7 @@ all <- rbind( ge_ligne,
 #### DÉBUT : Créer le leaflet
 
 #mypal <- leaflet::colorFactor(viridis_pal(option="C")(7), domain = all$name_legende)
-mypal <- leaflet::colorFactor(brewer.pal(n=7, name= "Dark2"), 
+mypal <- leaflet::colorFactor(brewer.pal(n=9, name= "Dark2"), 
                               domain = all$name_legende)
 
 all %>% leaflet() %>% 
@@ -217,6 +226,8 @@ all %>% leaflet() %>%
             values = ~ name_legende,
             title = "Sentiers de la section des écarts") 
   
+
+
 mymap <-  all %>% leaflet() %>% 
     addProviderTiles(providers$Esri.WorldTopoMap, group= "topo") %>%
     addProviderTiles(providers$Esri.WorldImagery, group= "satellite") %>%
@@ -236,3 +247,7 @@ mymap <-  all %>% leaflet() %>%
 mymap
 saveWidget(mymap, file = "carte_ecarts.html", selfcontained = T)
 #### FIN : Créer le leaflet
+
+
+couture %>% st_zm %>%  select(-Description) %>% leaflet() %>% addPolylines()
+
