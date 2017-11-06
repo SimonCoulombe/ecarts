@@ -1,18 +1,19 @@
 
-library(sf)
-library(leaflet)
-library(lubridate)
-library(dplyr)
-library(viridis)
-library(RColorBrewer)
-library(htmlwidgets)
+library(sf) #pour manipulation des données géospatiales
+library(leaflet) #pour leaflet
+library(lubridate) #pour manipulation des dates
+library(dplyr) # pour manipulation des tibble
+library(viridis) #pour la palette de couleur
+library(RColorBrewer) #pour la palette de couleur
+library(htmlwidgets) #pour sauvegarder le leaflet
+library(htmltools) # pour htmlEscape dans les popups
+library(stringr) # pour remplacer les caractères dans les string avant export vers kml
+
 ## importer le GPX avec sf:st_read, rgdal::readOGR ou plotKML::readGPX 
 # perd les datetime  des points. J'ai oublié où j'ai lu ça, mais apparemment 
 # c'est normal car les shapefile ont juste la date.  Faisons le quand même.
 way <- st_read("ecarts.gpx", layer = "waypoints") %>% st_transform(., "+proj=longlat +datum=WGS84") 
 tracks <- st_read("ecarts.gpx", layer = "tracks") %>% st_transform(., "+proj=longlat +datum=WGS84") 
-
-
 
 ### les kml il faut enlever l'axe des Z avec st_zm, sinon on a une erreur opaque
 # https://github.com/r-spatial/mapview/issues/98
@@ -227,11 +228,19 @@ all %>% leaflet() %>%
             title = "Sentiers de la section des écarts") 
   
 
+text <- "<b>Piste %s</b><hr noshade size='1'/> Longueur: %s"
 
 mymap <-  all %>% leaflet() %>% 
     addProviderTiles(providers$Esri.WorldTopoMap, group= "topo") %>%
     addProviderTiles(providers$Esri.WorldImagery, group= "satellite") %>%
-    addPolylines(color = ~ mypal(name_legende)) %>%
+    addPolylines(weight= 3 ,color = ~ mypal(name_legende),
+                 label = ~paste0(name_legende),
+                 highlightOptions = highlightOptions(color = "white", weight = 3,
+                                                     bringToFront = TRUE),
+                 popup = ~sprintf(
+                   text,
+                   htmlEscape(name),
+                   htmlEscape(floor(longueur)))) %>%
     addMarkers(data= way %>% filter(name == "GE"), 
                label = ~ paste0("Départ"),
                group = "Afficher départ")  %>%
@@ -249,5 +258,11 @@ saveWidget(mymap, file = "carte_ecarts.html", selfcontained = T)
 #### FIN : Créer le leaflet
 
 
-couture %>% st_zm %>%  select(-Description) %>% leaflet() %>% addPolylines()
+## enlever les accents pour kml
+
+all$name<- str_replace(all$name,"É", "E")
+all$name_legende<- str_replace(all$name_legende,"É", "E")
+all$name<- str_replace(all$name,"à", "à")
+all$name_legende<- str_replace(all$name_legende,"à", "à")
+st_write(all, "ecarts.kml")
 
